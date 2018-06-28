@@ -1,7 +1,7 @@
 import unittest
 
 from redisor import get_client, setup
-from redisor.structure import List, Set
+from redisor.structure import List, Set, Hash
 
 
 class BaseTestMixin(unittest.TestCase):
@@ -49,6 +49,18 @@ class SetTestCase(BaseTestMixin, unittest.TestCase):
         self.assertEqual(self.set_b | self.set_c, {"one", "two", "three"})
         self.assertEqual(self.set_b - self.set_c, {"one"})
         self.assertEqual(self.set_c - self.set_b, {"three"})
+
+
+class HashTestCase(BaseTestMixin, unittest.TestCase):
+
+    def test_base_operation(self):
+        self.hash_a = Hash(db=self.db, key="test_hash_a")
+        self.hash_a.update({"a": 3}, b=4)
+        self.assertEqual(self.hash_a.all(), {"a": '3', "b": '4'})
+        del self.hash_a["a"]
+        self.assertEqual(self.hash_a.all(), {"b": "4"})
+        self.hash_a.update({"1":1,"2":2,"3":3,"4":4,"5":5,"6":6})
+        print(self.hash_a)
 
 
 if __name__ == "__main__":

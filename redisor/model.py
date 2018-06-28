@@ -20,3 +20,5 @@ class Model(dict, metaclass=BaseModelMeta):
 
     def get_value(self, key, default=None):
         return getattr(self, key, default)
+
+

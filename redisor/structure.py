@@ -1,3 +1,6 @@
+import itertools
+
+
 class List:
 
     def __init__(self, db, key):
@@ -162,3 +165,55 @@ class Hash:
     def __init__(self, db, key):
         self.db = db
         self.key = key
+
+    def all(self):
+        return self.db.hgetall(self.key)
+
+    def keys(self):
+        return self.db.hkeys(self.key) or []
+
+    def values(self):
+        return self.db.hvals(self.key) or []
+
+    def has_key(self, field):
+        return self.db.hexists(self.key, field)
+
+    def get(self, field, default=None):
+        value = self.db.hget(self.key, field)
+        if value is None:
+            value = default
+        return value
+
+    def update(self, *args, **kwargs):
+        kwargs.update(*args)
+        return self.db.hmset(self.key, kwargs)
+
+    def __len__(self):
+        return self.db.hlen(self.key)
+
+    def __getitem__(self, field):
+        value = self.db.hget(self.key, field)
+        if value is None:
+            raise KeyError(field)
+        return value
+
+    def __setitem__(self, field, value):
+        return self.db.hset(self.key, field, value)
+
+    def __delitem__(self, field):
+        effect = self.db.hdel(self.key, field)
+        if effect == 0:
+            raise KeyError(field)
+
+    def __iter__(self):
+        yield from self.all()
+
+    __contains__ = has_key
+
+    def __repr__(self):
+        length = len(self)
+        show_items = min(length, 5)
+        return '<Hash(key=%s, value=%s)' % (
+            self.key,
+            self.db.hscan(self.key, count=5)
+        )
