@@ -1,3 +1,5 @@
+import time
+
 from redisor.field import StringField, AutoIncrementField, JsonField
 from redisor.model import Model
 from redisor import get_client
@@ -6,9 +8,10 @@ from redisor import get_client
 class Person(Model):
     __database__ = get_client()
     pk = AutoIncrementField(name='pk')
-    name = StringField(name='name', index=True)
+    name = StringField(name='name')
     address = StringField(name='address', default='1998')
     others = JsonField(name="others")
+    new = StringField(name='new', default=time.time)
 
     def to_dict(self):
         return {
@@ -38,9 +41,4 @@ class Person(Model):
 new = Person.objects.create(name="xionger", address="zzz")
 print(new.pk)
 print(new.name)
-# print(new.__dict__)
-# if __name__ == "__main__":
-#     import time
-#     t0 = time.time()
-#     print(Person.objects.get(3).to_dict())
-#     print(time.time()-t0)
+print(new.__dict__)

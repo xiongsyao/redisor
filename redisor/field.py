@@ -3,10 +3,9 @@ import json
 
 class Field:
 
-    def __init__(self, name, column_type, index, default, required=False, jsonify=False):
+    def __init__(self, name, column_type, default, required=False):
         self.name = name
         self.column_type = column_type
-        self.index = index
         self.default = default
         self.required = required
         self.model_class = None
@@ -35,16 +34,16 @@ class Field:
 
 class StringField(Field):
 
-    def __init__(self, name=None, index=False, default=None):
-        super().__init__(name, str, index, default)
+    def __init__(self, name=None, default=None):
+        super().__init__(name, str, default)
 
 
 class JsonField(Field):
 
-    def __init__(self, name=None, index=False, default=None):
+    def __init__(self, name=None, default=None):
         if default is None:
             default = {}
-        super().__init__(name, 'json', index, default)
+        super().__init__(name, 'json', default)
 
     def python_value(self, value):
         return json.loads(value)
@@ -55,14 +54,13 @@ class JsonField(Field):
 
 class IntegerField(Field):
 
-    def __init__(self, name=None, index=False, default=None):
-        super().__init__(name, int, index, default)
+    def __init__(self, name=None,  default=None):
+        super().__init__(name, int, default)
 
 
 class AutoIncrementField(IntegerField):
 
     def __init__(self, *args, **kwargs):
-        kwargs['index'] = True
         super(AutoIncrementField, self).__init__(*args, **kwargs)
 
     def _gen_key(self):
