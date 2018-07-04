@@ -1,6 +1,3 @@
-import itertools
-
-
 class List:
 
     def __init__(self, db, key):
@@ -59,6 +56,7 @@ class Set:
     def __init__(self, db, key):
         self.db = db
         self.key = key
+        print("new Set: key: %s" % key)
 
     def all(self):
         return self.db.smembers(self.key)
@@ -72,6 +70,11 @@ class Set:
 
     def discard(self, item):
         self.db.srem(self.key, item)
+
+    def intersection(self, key, *others):
+        """Return a new set with elements common to the set and all others."""
+        self.db.sinterstore(key, [self.key] + [o.key for o in others])
+        return Set(self.db, self.key)
 
     def __delitem__(self, item):
         return self.remove(item)

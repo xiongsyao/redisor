@@ -1,19 +1,33 @@
-from redisor.field import StringField, AutoIncrementField
+from redisor.field import StringField, AutoIncrementField, JsonField
 from redisor.model import Model
 from redisor import get_client
 
 
 class Person(Model):
-    database = get_client()
-    pk = AutoIncrementField(name='pk', primary_key=True)
-    name = StringField(name='name')
+    __database__ = get_client()
+    pk = AutoIncrementField(name='pk')
+    name = StringField(name='name', index=True)
     address = StringField(name='address', default='1998')
+    others = JsonField(name="others")
 
-person = Person(name=1, address="heiheihie")
-print(Person.__dict__)
-person.name = 123
-person.name = 123
-print(person._fields)
-print(person.__dict__)
-person.save()
-person.update({"name": "xingshengyao"})
+# person = Person(name=1, address="heiheihie")
+# print(Person.__dict__)
+# person.name = 123
+# person.name = 123
+# print(person._fields)
+# print(person.__dict__)
+# person.save()
+# # person.update({"name": "xingshengyao"})
+# person2 = Person(name=2, address="zxxxx")
+# person2.save()
+# person = Person(name='xiongda')
+# person.others = {"age":18, "ni": "wo"}
+# person.save()
+# print(person.id)
+# print(person.address)
+# print(person.others)
+# new = Person.objects.create(name="xionger", address="zzz")
+# print(new.pk)
+# print(new.name)
+# print(new.__dict__)
+print(Person.load(2).__dict__)
