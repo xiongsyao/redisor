@@ -14,7 +14,10 @@ class Database(Redis):
     def __init__(self, *args, **kwargs):
         super(Database, self).__init__(*args, **kwargs)
         self.__mapping__ = {
-            'list': None
+            'list': self.List,
+            'hash': self.Hash,
+            'set': self.Set,
+            'zset': self.ZSet
         }
 
     def List(self, key):
@@ -54,7 +57,7 @@ class Query:
         self._filters.update(kwargs)
         return self.get_model_queryset()
 
-    def get_by_id(self, id):
+    def get(self, id):
         return self.get_model_queryset()._get_item_with_id(id)
 
 
@@ -67,21 +70,34 @@ class Queryset:
         self._filters = filters
 
     def __getitem__(self, index):
-        pass
+        l = sorted(list(self.set))
+        try:
+            return self._get_item_with_id(l[int(index)])
+        except IndexError:
+            return None
 
     def _get_item_with_id(self, id):
-        key = self.model_class._key[id]
-        if self.db.exists(key):
-            kwargs = self.db.hgetall(key)
-            instance = self.model_class(**kwargs)
-            instance._id = str(id)
-            return instance
-        else:
-            return None
+        """Query data from redis by primary_key, and return a Model instance.
+        :param primary_key:
+        :return:
+        """
+        raw_data = self.db.hgetall(Key(self.model_class.__name__)[id])
+        if not raw_data:
+            raise Exception('%s `id` %s  doest`t exist.' % (self.model_class.__name__, id))
+        data = {}
+        for name, field in self.model_class._fields.items():
+            if name not in raw_data:
+                data[name] = None
+            else:
+                data[name] = field.python_value(raw_data[name])
+        instance = self.model_class(**data)
+        instance._id = str(id)
+        return instance
 
     @property
     def set(self):
         s = Set(self.db, self.key)
+        print("filter s %s" % s)
         if self._filters:
             indices = []
             for k, v in self._filters.items():
@@ -109,6 +125,8 @@ class Queryset:
         return set(map(lambda id: self._get_item_with_id(id), self.set.all()))
 
     def __iter__(self):
+        print("do search in redis")
+        print(list(self.set))
         return iter(self.set)
 
 
@@ -162,30 +180,9 @@ class Model(object, metaclass=BaseModelMeta):
             logger.info("Set default %s ==> %s" % (field_name, default))
             setattr(self, field_name, default)
 
-    @classmethod
-    def load(cls, id):
-        """Query data from redis by primary_key, and return a Model instance.
-        :param primary_key:
-        :return:
-        """
-        raw_data = cls.__database__.hgetall(Key(cls.__name__)[id])
-        if not raw_data:
-            raise Exception('%s `id` %s  doest`t exist.' % (cls.__name__, id))
-        data = {}
-        for name, field in cls._fields.items():
-            if name not in raw_data:
-                data[name] = None
-            else:
-                data[name] = field.python_value(raw_data[name])
-        return cls(**data)
-
     @property
     def db(cls):
         return cls.__database__
-
-    @property
-    def indices(cls):
-        return cls._indices
 
     @property
     def fields(cls):
@@ -203,17 +200,22 @@ class Model(object, metaclass=BaseModelMeta):
         setattr(self, '_id', str(val))
 
     def save(self):
+        """Use pipeline to ensure atomicity
+
+        """
+        pipe = self.db.pipeline()
         if self.is_new():
-            self._init_id()
-        self._create_membership()
-        # self._update_indices()
+            self._init_id(pipe)
+        self._create_membership(pipe)
         h = {}
         for k, v in self.fields.items():
             logger.info("%s ==> %s" % (k, v))
             print("%s == > %s" % (k, getattr(self, k)))
             h[k] = v.redis_value(getattr(self, k))
             setattr(self, k, v.python_value(h[k]))
-        self.db.hmset(self.key(), h)
+        pipe.hmset(self.key(), h)
+        pipe.execute()
+        return True
 
     def update(self, *args, **kwargs):
         kwargs.update(*args)
@@ -228,8 +230,8 @@ class Model(object, metaclass=BaseModelMeta):
     def is_new(self):
         return not hasattr(self, '_id')
 
-    def _init_id(self):
-        setattr(self, 'id', str(self.db.incr(self._key['id']['_sequence'])))
+    def _init_id(self, pipe=None):
+        setattr(self, 'id', str(pipe.incr(self._key['id']['_sequence'])))
 
     def _index_key_for(self, field, value=None):
         if value is None:
@@ -240,33 +242,8 @@ class Model(object, metaclass=BaseModelMeta):
                 value = str(value())
         return self._key[field][value]
 
-    def _create_membership(self):
-        Set(self.db, self._key['all']).add(self.id)
+    def _create_membership(self, pipe=None):
+        pipe.sadd(self._key['all'], self.key)
 
-    def _delete_membership(self):
-        Set(self.db, self._key['all']).remove(self.id)
-
-    def _add_to_index(self, index, val=None, pipe=None):
-        index = self._index_key_for(index, val)
-        pipe.sadd(index, self.id)
-        pipe.sadd(self.key()['_indices'], index)
-
-    def _add_to_indices(self):
-        s = Set(self.db, self.key()['_indices'])
-        pipe = s.db.pipeline()
-        for index in self.indices:
-            self._add_to_index(index, pipe=pipe)
-        pipe.execute()
-
-    def _update_indices(self):
-        self._delete_from_indices()
-        self._add_to_indices()
-
-    def _delete_from_indices(self):
-        s = Set(self.db, self.key()['_indices'])
-        pipe = s.db.pipeline()
-        for index in s.all():
-            logger.info('Remove %s from %s' % (index, s.all()))
-            pipe.srem(index, self.id)
-        pipe.delete(s.key)
-        pipe.execute()
+    def _delete_membership(self, pipe=None):
+        pipe.srem(self._key['all'], self.key)

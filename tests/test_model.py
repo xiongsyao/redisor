@@ -10,6 +10,15 @@ class Person(Model):
     address = StringField(name='address', default='1998')
     others = JsonField(name="others")
 
+    def to_dict(self):
+        return {
+            "id": self.id,
+            "name": self.name,
+            "address": self.address,
+            "pk": self.pk,
+            "others": self.others
+        }
+
 # person = Person(name=1, address="heiheihie")
 # print(Person.__dict__)
 # person.name = 123
@@ -26,8 +35,12 @@ class Person(Model):
 # print(person.id)
 # print(person.address)
 # print(person.others)
-# new = Person.objects.create(name="xionger", address="zzz")
-# print(new.pk)
-# print(new.name)
+new = Person.objects.create(name="xionger", address="zzz")
+print(new.pk)
+print(new.name)
 # print(new.__dict__)
-print(Person.load(2).__dict__)
+# if __name__ == "__main__":
+#     import time
+#     t0 = time.time()
+#     print(Person.objects.get(3).to_dict())
+#     print(time.time()-t0)
