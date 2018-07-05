@@ -1,5 +1,7 @@
 import json
 
+from .structure import List
+
 
 class Field:
 
@@ -30,6 +32,36 @@ class Field:
             self.column_type,
             self.name
         )
+
+
+class ExtField:
+
+    def __init__(self, name, default, required=False):
+        self.name = name
+        self.default = default
+        self.required = required
+        self.model_class = None
+
+    def add_to_class(self, model_class, name):
+        self.model_class = model_class
+        self.name = name
+
+    def save(self, pipe, key, value):
+        """save ext_field
+        """
+        raise NotImplementedError
+
+    def load(self, key):
+        """load ext_field
+        """
+        raise NotImplementedError
+
+    # def __repr__(self):
+    #     return '<%s:%s> ' % (
+    #         self.__class__.__name__,
+    #         self.name
+    #     )
+
 
 
 class StringField(Field):
@@ -70,7 +102,6 @@ class AutoIncrementField(IntegerField):
                 self.name
             )
             seq = self.model_class.__database__.incr(key)
-            print("gen key %s" % seq)
             setattr(self, "key", seq)
         else:
             seq = getattr(self, "key")
@@ -81,3 +112,35 @@ class AutoIncrementField(IntegerField):
 
     def python_value(self, value):
         return self._gen_key()
+
+
+class ListField(ExtField):
+
+    def __init__(self, name, default=None):
+        self.name = name
+        self.default = default if default is not None else []
+        super(ListField, self).__init__(self, name, default)
+
+    def save(self, pipe, key, value):
+        pipe.rpush(key, *value)
+
+    def load(self, key):
+        return self.model_class.__database__.lrange(key, 0, -1)
+
+
+class HashField(ExtField):
+
+    def __init__(self, name, default=None):
+        self.name = name
+        self.default = default if default is not None else {}
+        super(HashField, self).__init__(self, name, default)
+
+    def save(self, pipe, key, value):
+        pipe.hmset(key, value)
+
+    def load(self, key):
+        return self.model_class.__database__.hgetall(key)
+
+
+__all__ = ['Field', 'ExtField', 'StringField', 'AutoIncrementField',
+           'IntegerField', 'ListField', 'HashField', 'JsonField']

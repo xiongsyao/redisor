@@ -57,11 +57,13 @@ class Queryset:
         if not raw_data:
             raise Exception('%s `id` %s  doest`t exist.' % (self.model_class.__name__, id))
         data = {}
-        for name, field in self.model_class.fields.items():
+        for name, field in self.model_class._fields.items():
             if name not in raw_data:
                 data[name] = None
             else:
                 data[name] = field.python_value(raw_data[name])
+        for name, field in self.model_class._ext_fields.items():
+            data[name] = field.load(Key(self.model_class.__name__)[id][name])
         instance = self.model_class(**data)
         instance._id = str(id)
         return instance
@@ -95,6 +97,9 @@ class Queryset:
     @property
     def members(self):
         return set(map(lambda _id: self._get_item_with_id(_id), self.set.all()))
+
+    def count(self):
+        return len(self.set)
 
     def __iter__(self):
         print("do search in redis")

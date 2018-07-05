@@ -1,44 +1,65 @@
 import time
-
-from redisor.field import StringField, AutoIncrementField, JsonField
-from redisor.model import Model
+import unittest
 from redisor import get_client
 
+from redisor import model
 
-class Person(Model):
+
+class Person(model.Model):
+
     __database__ = get_client()
-    pk = AutoIncrementField(name='pk')
-    name = StringField(name='name')
-    address = StringField(name='address', default='1998')
-    others = JsonField(name="others")
-    new = StringField(name='new', default=time.time)
+
+    rank = model.AutoIncrementField(name='rank')
+    name = model.StringField(name='name')
+    address = model.StringField(name='address', default='1998')
+    create_at = model.IntegerField(name='create_at', default=time.time)
+    friend = model.ListField(name='friend')
+    more_info = model.HashField(name='more_info')
+    others = model.JsonField(name="others")
 
     def to_dict(self):
         return {
             "id": self.id,
+            "rank": self.rank,
             "name": self.name,
             "address": self.address,
-            "pk": self.pk,
+            "create_at": self.create_at,
+            "friend": self.friend,
+            "more_info": self.more_info,
             "others": self.others
         }
 
-# person = Person(name=1, address="heiheihie")
-# print(Person.__dict__)
-# person.name = 123
-# person.name = 123
-# print(person._fields)
-# print(person.__dict__)
-# person.save()
-# # person.update({"name": "xingshengyao"})
-# person2 = Person(name=2, address="zxxxx")
-# person2.save()
-# person = Person(name='xiongda')
-# person.others = {"age":18, "ni": "wo"}
-# person.save()
-# print(person.id)
-# print(person.address)
-# print(person.others)
-new = Person.objects.create(name="xionger", address="zzz")
-print(new.pk)
-print(new.name)
-print(new.__dict__)
+
+class ModelTestCase(unittest.TestCase):
+
+    def setUp(self):
+        self.client = get_client()
+        self.client.flushdb()
+
+    def tearDown(self):
+        self.client.flushdb()
+
+    def test_key(self):
+        self.assertEqual('Person', Person._key)
+
+    def test_is_new_and_save(self):
+        liming = Person(name="Liming", address="China", friend=["HanMeimei", "ZhangTiezhu"],
+                   more_info={"age": 13}, others={"family": ["papa", "mama"]})
+        self.assertTrue(liming.is_new())
+        liming.save()
+        self.assertFalse(liming.is_new())
+        self.assertEqual("1", liming.id)
+
+    def test_query(self):
+        liming = Person(name="Liming", address="China", friend=["HanMeimei", "ZhangTiezhu"],
+                   more_info={"age": 13}, others={"family": ["papa", "mama"]})
+        liming.save()
+        p = Person.objects.get(1)
+        print(p.to_dict())
+        self.assertEqual(8, len(p.to_dict()))
+        p2 = Person.objects.all()[0]
+        # self.assertEqual(p, p2)
+
+
+if __name__ == "__main__":
+    unittest.main()

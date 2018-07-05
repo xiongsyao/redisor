@@ -1,7 +1,7 @@
 from redis import Redis
 from . import get_client
 from .logcenter import logger
-from .field import Field, AutoIncrementField
+from .field import *
 from .structure import *
 from .query import *
 
@@ -34,26 +34,31 @@ class BaseModelMeta(type):
         if name == "Model":
             return type.__new__(mcs, name, bases, attrs)
 
+        ext_fields = dict()
         fields = dict()
         defaults = dict()
 
         for k, v in attrs.items():
-            if not isinstance(v, Field):
+            if not isinstance(v, (Field, ExtField)):
                 continue
             logger.info(' found mapping: %s ==> %s' % (k, v))
-            fields[k] = v
+            if isinstance(v, Field):
+                fields[k] = v
+            else:
+                ext_fields[k] = v
             if v.default is not None:
                 defaults[k] = v.default
 
         model_class = super(BaseModelMeta, mcs).__new__(mcs, name, bases, attrs)
         model_class._fields = fields
+        model_class._ext_fields = ext_fields
         model_class._defaults = defaults
         model_class._key = Key(name)
         # Add Queryset for model_class
         model_class.objects = Query(model_class)
 
         for key, value in attrs.items():
-            if isinstance(value, Field):
+            if isinstance(value, (Field, ExtField)):
                 value.add_to_class(model_class, key)
         return model_class
 
@@ -106,13 +111,26 @@ class Model(object, metaclass=BaseModelMeta):
             self._init_id()
         pipe = self.db.pipeline()
         self._create_membership(pipe)
-        h = {}
+        h = self._save_ext_fields(pipe)
+        h[id] = self.id
         for k, v in self.fields.items():
             logger.info("%s ==> %s" % (k, v))
             print("%s == > %s" % (k, getattr(self, k)))
             h[k] = v.redis_value(getattr(self, k))
             setattr(self, k, v.python_value(h[k]))
         pipe.hmset(self.key(), h)
+        pipe.execute()
+        return True
+
+    def delete(self):
+        if self.is_new():
+            raise RuntimeError("No such data")
+        pipe = self.db.pipeline()
+        self._delete_membership(pipe)
+        ext_keys = [self.key()[e] for e in self._ext_fields.keys()]
+        pipe.delete(*ext_keys)
+        print(self.key())
+        pipe.delete(self.key())
         pipe.execute()
         return True
 
@@ -146,3 +164,13 @@ class Model(object, metaclass=BaseModelMeta):
 
     def _delete_membership(self, pipe=None):
         pipe.srem(self._key['all'], self.key())
+
+    def _save_ext_fields(self, pipe=None):
+        ext_h = {}
+        for name, field in self._ext_fields.items():
+            logger.info("%s ==> %s" % (name, field))
+            key = self.key()[name]
+            val = getattr(self, name)
+            field.save(pipe, key, val)
+            ext_h[name] = self.key()[name]
+        return ext_h
